@@ -1,0 +1,2091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Race Replay – Pro (Dark HUD + Elevation)</title>
+
+  <!-- Leaflet core -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- REQUIRED for Leaflet.TimeDimension -->
+  <script src="https://cdn.jsdelivr.net/npm/iso8601-js-period@0.2.1/iso8601.min.js"></script>
+
+  <!-- TimeDimension plugin -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.control.min.css"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #020617;
+      --panel: #020617;
+      --panel-soft: #020617;
+      --fg: #e5e7eb;
+      --sub: #cbd5e1;
+      --muted: #6b7280;
+      --border: #1f2937;
+      --accent: #a5b4fc;
+      --accent-soft: rgba(129, 140, 248, 0.12);
+      --accent-strong: rgba(129, 140, 248, 0.3);
+      --danger: #f97373;
+      --danger-soft: rgba(248, 113, 113, 0.15);
+      --pill-bg: #020617;
+      --pill-bd: #1f2937;
+      --leader: #fbbf24;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: radial-gradient(circle at top, #020617 0, #020617 45%, #000 100%);
+      color: var(--fg);
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #app {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      height: 100%;
+    }
+
+    /* Toolbar */
+
+    #toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.6rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(to right, #020617, #020617);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.9);
+      z-index: 1000;
+    }
+
+    #toolbar-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    #toolbar-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .section {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding-right: 0.8rem;
+      border-right: 1px solid rgba(15, 23, 42, 0.9);
+      margin-right: 0.4rem;
+    }
+    .section:last-child {
+      border-right: none;
+      margin-right: 0;
+      padding-right: 0;
+    }
+
+    .btn {
+      padding: 0.3rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: radial-gradient(circle at top, #0b1120 0, #020617 60%);
+      color: var(--fg);
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: border-color 0.15s, box-shadow 0.15s, transform 0.06s;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9);
+    }
+    .btn:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.4),
+        0 10px 20px rgba(15, 23, 42, 0.9);
+      transform: translateY(-0.5px);
+    }
+    .btn:active {
+      transform: translateY(0.5px);
+      box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.8);
+    }
+
+    .btn-icon {
+      font-size: 0.9rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      padding: 0.12rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid var(--pill-bd);
+      background: radial-gradient(circle at top, #020617 0, #020617 40%, #020617 100%);
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    #drop {
+      border-radius: 999px;
+      border: 1px dashed rgba(55, 65, 81, 0.9);
+      padding: 0.18rem 0.7rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: radial-gradient(circle at top, #020617 0, #020617 60%);
+    }
+    #drop.active {
+      border-style: solid;
+      border-color: var(--accent);
+      background: radial-gradient(circle at top, rgba(129, 140, 248, 0.2) 0, #020617 60%);
+      color: var(--fg);
+    }
+
+    label {
+      font-size: 0.78rem;
+      color: var(--sub);
+    }
+
+    select {
+      background: #020617;
+      color: var(--fg);
+      border-radius: 999px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      padding: 0.18rem 0.55rem;
+      font-size: 0.78rem;
+    }
+
+    input[type="radio"],
+    input[type="checkbox"] {
+      accent-color: #4f46e5;
+    }
+
+    input[type="range"] {
+      width: 120px;
+    }
+
+    .tooltip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1rem;
+      height: 1rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.9);
+      font-size: 0.65rem;
+      cursor: default;
+      color: var(--muted);
+    }
+    .tooltip span {
+      position: absolute;
+      left: 50%;
+      top: 135%;
+      transform: translateX(-50%);
+      background: #020617;
+      border-radius: 0.6rem;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.7rem;
+      color: var(--sub);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.9);
+      width: 260px;
+      max-width: 260px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+      z-index: 1500;
+    }
+    .tooltip:hover span {
+      opacity: 1;
+    }
+
+    /* Settings panel (drop-down) */
+
+    #settingsPanel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.55rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+      background: radial-gradient(circle at top, #020617 0, #020617 60%, #000 100%);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.9);
+    }
+
+    #settingsPanel .section {
+      border-right: 1px solid rgba(15, 23, 42, 0.9);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Main layout */
+
+    #main {
+      display: grid;
+      grid-template-columns: minmax(0, 2.3fr) minmax(320px, 1.2fr);
+      gap: 0;
+      height: calc(100vh - 56px); /* toolbar height only; page may scroll when settings open */
+    }
+
+    /* Map column split into map + elevation profile */
+
+    #mapColumn {
+      display: grid;
+      grid-template-rows: minmax(0, 0.85fr) minmax(0, 0.15fr);
+      height: 100%;
+      position: relative; /* for mapTime overlay */
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #020617;
+    }
+
+    /* Time overlay in top-right of map column */
+    #mapTime {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(56, 189, 248, 0.7);
+      color: #38bdf8; /* bright blue */
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      z-index: 1200;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
+      pointer-events: none;
+    }
+
+    #elevContainer {
+      border-top: 1px solid var(--border);
+      background: radial-gradient(circle at top, #020617 0, #020617 60%, #020617 100%);
+      position: relative;
+      padding: 4px 8px 6px;
+    }
+
+    #elevContainerTitle {
+      position: absolute;
+      left: 10px;
+      top: 4px;
+      font-size: 0.7rem;
+      color: var(--muted);
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    #elevNoData {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    #elevSvg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+    #elevSvg.panning {
+      cursor: grabbing !important;
+    }
+
+    #side {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      border-left: 1px solid var(--border);
+      background: radial-gradient(circle at top, #020617 0, #020617 40%, #020617 100%);
+    }
+
+    #summary {
+      padding: 0.6rem 0.75rem 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #summary h2 {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #summaryStats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.35rem;
+      font-size: 0.75rem;
+      color: var(--sub);
+    }
+
+    #summaryStats .badge {
+      padding: 0.12rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: radial-gradient(circle at top, #020617 0, #020617 60%);
+    }
+
+    /* HUD */
+
+    #hud {
+      overflow: auto;
+      padding: 0.4rem 0.75rem 0.6rem;
+    }
+
+    #hud table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+
+    #hud thead {
+      background: radial-gradient(circle at top, #020617 0, #020617 50%);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    #hud th,
+    #hud td {
+      padding: 0.22rem 0.35rem;
+      text-align: right;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+      white-space: nowrap;
+    }
+
+    #hud th:first-child,
+    #hud td:first-child {
+      text-align: left;
+    }
+
+    #hud th {
+      font-weight: 500;
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    #hud tbody tr.leader {
+      background: radial-gradient(circle at center, rgba(251, 191, 36, 0.14) 0, transparent 60%);
+    }
+
+    #hud tbody tr:hover {
+      background: radial-gradient(circle at center, rgba(148, 163, 184, 0.1) 0, transparent 55%);
+    }
+
+    .runner-name-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .runner-swatch {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9);
+    }
+
+    .runner-toggle {
+      margin-right: 0.25rem;
+    }
+
+    .status-finished {
+      color: #bbf7d0;
+    }
+
+    /* Splits panel */
+
+    #splitsContainer {
+      border-top: 1px solid var(--border);
+      padding: 0.45rem 0.75rem 0.5rem;
+      max-height: 40vh;
+      overflow: auto;
+      font-size: 0.76rem;
+    }
+
+    #splitsContainer h3 {
+      margin: 0 0 0.35rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .runner-splits {
+      margin-bottom: 0.45rem;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: radial-gradient(circle at top, #020617 0, #020617 60%);
+      padding: 0.3rem 0.4rem 0.35rem;
+    }
+
+    .runner-splits-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      margin-bottom: 0.15rem;
+      color: var(--sub);
+    }
+
+    .runner-splits table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.74rem;
+    }
+
+    .runner-splits th,
+    .runner-splits td {
+      padding: 0.16rem 0.25rem;
+      text-align: right;
+    }
+
+    .runner-splits th:first-child,
+    .runner-splits td:first-child {
+      text-align: left;
+    }
+
+    .runner-splits tbody tr:nth-child(odd) {
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    /* Leaflet tweaks */
+
+    .leaflet-control-timecontrol {
+      font-size: 0.68rem;
+    }
+    .leaflet-bottom.leaflet-left {
+      margin-left: 0.45rem;
+      margin-bottom: 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Top bar -->
+    <div id="toolbar">
+      <div id="toolbar-left">
+        <div class="section" id="fileSection">
+          <label for="fileInput" class="btn" title="Add GPX files">
+            <span class="btn-icon">📁</span>
+            <span>+ Add GPX</span>
+          </label>
+          <input
+            id="fileInput"
+            class="hidden"
+            type="file"
+            accept=".gpx"
+            multiple
+          />
+          <div id="drop" title="Or drag & drop GPX files here">
+            Drop GPX files here
+          </div>
+          <span class="pill" id="status">No files loaded</span>
+        </div>
+      </div>
+      <div id="toolbar-right">
+        <button id="settingsToggle" class="btn" type="button">
+          <span class="btn-icon">⚙</span>
+          <span id="settingsLabel">Settings</span>
+          <span id="settingsChevron">▼</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Settings drop-down -->
+    <div id="settingsPanel" class="hidden">
+      <div class="section">
+        <label>Alignment:</label>
+        <label>
+          <input type="radio" name="align" value="real" checked />
+          Real time
+        </label>
+        <label>
+          <input type="radio" name="align" value="sync" />
+          Synchronized start
+        </label>
+      </div>
+
+      <div class="section">
+        <label for="gradWindow">Gradient window</label>
+        <div class="tooltip">
+          ?
+          <span>
+            Gradient is calculated as the change in elevation divided by
+            distance over this window centred on the runner.<br /><br />
+            <strong>50 m</strong> – very responsive but more jittery<br />
+            <strong>100 m</strong> – balanced (default)<br />
+            <strong>200 m</strong> – very smooth, averages short hills
+          </span>
+        </div>
+        <select id="gradWindow">
+          <option value="50">50 m</option>
+          <option value="100" selected>100 m</option>
+          <option value="200">200 m</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <label>
+          <input type="checkbox" id="toggleSplits" />
+          Show splits
+        </label>
+      </div>
+
+      <div class="section">
+        <label for="basemap">Map Type:</label>
+        <select id="basemap">
+          <option value="osm">OSM</option>
+          <option value="esri">Esri imagery</option>
+          <option value="terrain">Terrain</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <label>Names:</label>
+        <label>
+          <input type="radio" name="nameMode" value="gpx" checked />
+          Course
+        </label>
+        <label>
+          <input type="radio" name="nameMode" value="file" />
+          File
+        </label>
+      </div>
+
+      <div class="section">
+        <label for="tailSlider">Tail length</label>
+        <input
+          type="range"
+          id="tailSlider"
+          min="0"
+          max="180"
+          step="10"
+          value="30"
+        />
+        <span class="pill" id="tailLabel">30s</span>
+      </div>
+
+      <div class="section">
+        <label>Speed:</label>
+        <label>
+          <input type="radio" name="speed" value="1" />
+          1×
+        </label>
+        <label>
+          <input type="radio" name="speed" value="2" />
+          2×
+        </label>
+        <label>
+          <input type="radio" name="speed" value="4" checked />
+          4×
+        </label>
+        <label>
+          <input type="radio" name="speed" value="10" />
+          10×
+        </label>
+      </div>
+
+      <div class="section">
+        <label>Elevation:</label>
+        <label>
+          <input type="radio" name="elevMode" value="per" checked />
+          Per runner
+        </label>
+        <label>
+          <input type="radio" name="elevMode" value="avg" />
+          Average
+        </label>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div id="main">
+      <div id="mapColumn">
+        <div id="map"></div>
+        <div id="mapTime"></div>
+        <div id="elevContainer">
+          <div id="elevContainerTitle">Elevation profile</div>
+          <div id="elevNoData" class="hidden">No elevation data</div>
+          <svg id="elevSvg"></svg>
+        </div>
+      </div>
+      <div id="side">
+        <div id="summary">
+          <h2>Race HUD</h2>
+          <div id="summaryStats">
+            <div class="badge" id="summaryRunners">0 runners</div>
+            <div class="badge" id="summaryDistance">– km</div>
+            <div class="badge" id="summaryDuration">–:–</div>
+          </div>
+        </div>
+        <div id="hud">
+          <table>
+            <thead>
+              <tr>
+                <th>Runner</th>
+                <th>Elapsed</th>
+                <th>Dist (km)</th>
+                <th>Avg pace</th>
+                <th>Current pace</th>
+                <th>500m avg</th>
+                <th>HR</th>
+                <th>Grad</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="hudBody"></tbody>
+          </table>
+        </div>
+        <div id="splitsContainer" class="hidden">
+          <h3>KM splits</h3>
+          <div id="splitsPanel"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Config & globals ----------------------------------------------------
+
+    const COLORS = [
+      "#ef4444",
+      "#3b82f6",
+      "#22c55e",
+      "#f97316",
+      "#a855f7",
+      "#ec4899",
+      "#14b8a6",
+      "#eab308",
+      "#6366f1",
+      "#f97373",
+      "#06b6d4",
+      "#facc15",
+      "#8b5cf6"
+    ];
+    function pickColor(i) {
+      return COLORS[i % COLORS.length];
+    }
+
+    const osm = L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
+      }
+    );
+    const esri = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        maxZoom: 19,
+        attribution: "Imagery &copy; Esri"
+      }
+    );
+    const stamenTerrain = L.tileLayer(
+      "https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg",
+      {
+        maxZoom: 18,
+        attribution: "Map tiles &copy; Stamen Terrain"
+      }
+    );
+
+    // Elevation drawing padding (shared with zoom/pan logic)
+    const ELEV_PADDING_LEFT = 32;
+    const ELEV_PADDING_RIGHT = 8;
+    const ELEV_PADDING_TOP = 14;
+    const ELEV_PADDING_BOTTOM = 16;
+
+    // Elevation view range (distance in metres)
+    let elevViewStart = null;
+    let elevViewEnd = null;
+    let elevMaxDist = 0;
+
+    // Pan state
+    let elevIsPanning = false;
+    let elevPanStartX = 0;
+    let elevPanViewStart = 0;
+    let elevPanViewEnd = 0;
+
+    // Default ~4x speed => 250 ms transitionTime
+    const DEFAULT_TRANSITION_TIME = 250;
+
+    const map = L.map("map", {
+      zoom: 13,
+      center: [53.48, -2.3],
+      layers: [osm],
+      timeDimension: true,
+      timeDimensionOptions: {
+        period: "PT1S"
+      },
+      timeDimensionControl: false
+    });
+
+    const player = new L.TimeDimension.Player(
+      {
+        transitionTime: DEFAULT_TRANSITION_TIME,
+        loop: false,
+        startOver: true
+      },
+      map.timeDimension
+    );
+
+    const tdControl = new L.Control.TimeDimension({
+      position: "bottomleft",
+      player: player,
+      autoPlay: false,
+      minSpeed: 0.5,
+      speedStep: 0.5,
+      maxSpeed: 20,
+      timeSliderDragUpdate: true,
+      displayDate: false   // hide time/date from bottom bar
+    });
+    map.addControl(tdControl);
+
+    document
+      .getElementById("basemap")
+      .addEventListener("change", (e) => {
+        const val = e.target.value;
+        [osm, esri, stamenTerrain].forEach((l) => map.removeLayer(l));
+        if (val === "esri") esri.addTo(map);
+        else if (val === "terrain") stamenTerrain.addTo(map);
+        else osm.addTo(map);
+      });
+
+    const statusEl = document.getElementById("status");
+    function setStatus(msg, isError = false) {
+      if (!statusEl) return;
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? "#fecaca" : "var(--accent)";
+      statusEl.style.borderColor = isError ? "#b91c1c" : "var(--pill-bd)";
+      statusEl.style.background = isError
+        ? "var(--danger-soft)"
+        : "radial-gradient(circle at top, #020617 0, #020617 60%)";
+    }
+
+    let runners = [];
+    let globalStart = null,
+      globalEnd = null;
+    const BASE_SYNC_EPOCH = Date.parse("2000-01-01T00:00:00Z");
+    let GRAD_WINDOW_M = 100;
+    let USE_FILE_NAME = false; // false = course (GPX) name, true = file name
+    let TAIL_SECONDS = 30; // tail length in seconds
+    let ELEV_MODE = "per"; // "per" = per runner, "avg" = averaged profile
+
+    function isoDurationFromSeconds(sec) {
+      const s = Math.max(0, Math.round(sec));
+      return "PT" + s + "S";
+    }
+
+    function handleParseError(fileName, e) {
+      console.error("Parse error for", fileName, e);
+      const msg =
+        (e && (e.message || e.toString())) || "Unknown error";
+      setStatus(`Error parsing ${fileName}: ${msg}`, true);
+    }
+
+    // --- Settings toggle -----------------------------------------------------
+
+    const settingsPanel = document.getElementById("settingsPanel");
+    const settingsToggle = document.getElementById("settingsToggle");
+    const settingsChevron = document.getElementById("settingsChevron");
+
+    settingsToggle.addEventListener("click", () => {
+      const isHidden = settingsPanel.classList.contains("hidden");
+      if (isHidden) {
+        settingsPanel.classList.remove("hidden");
+        settingsChevron.textContent = "▲";
+      } else {
+        settingsPanel.classList.add("hidden");
+        settingsChevron.textContent = "▼";
+      }
+    });
+
+    // --- Utilities -----------------------------------------------------------
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = (d) => (d * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function formatTime(ms) {
+      if (!isFinite(ms) || ms < 0) return "–";
+      const totalSeconds = Math.round(ms / 1000);
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      const pad = (n) => String(n).padStart(2, "0");
+      if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+      return `${m}:${pad(s)}`;
+    }
+
+    function formatPace(secPerKm) {
+      if (!isFinite(secPerKm) || secPerKm <= 0) return "–";
+      const m = Math.floor(secPerKm / 60);
+      const s = Math.round(secPerKm % 60);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${m}:${pad(s)}/km`;
+    }
+
+    function findIndexAtTime(times, t) {
+      if (!times.length) return -1;
+      if (t <= times[0]) return 0;
+      if (t >= times[times.length - 1]) return times.length - 1;
+      let lo = 0,
+        hi = times.length - 1;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (times[mid] <= t) lo = mid;
+        else hi = mid;
+      }
+      return lo;
+    }
+
+    // current pace: ~20s time window
+    function computeInstantPace(runner, idx) {
+      const times = runner.times;
+      const dists = runner.cumDist;
+      if (!times.length || idx <= 0) return NaN;
+      const windowSec = 20;
+      const tNow = times[idx];
+      let j = idx;
+      while (j > 0 && (tNow - times[j]) < windowSec * 1000) j--;
+      if (j === idx) return NaN;
+      const dtSec = (times[idx] - times[j]) / 1000;
+      const dKm = (dists[idx] - dists[j]) / 1000;
+      if (dtSec <= 0 || dKm <= 0) return NaN;
+      return dtSec / dKm;
+    }
+
+    // 500m rolling average pace (distance window)
+    function computeRollingDistancePace(runner, idx, windowM) {
+      const times = runner.times;
+      const dists = runner.cumDist;
+      if (!times.length || idx <= 0) return NaN;
+
+      const distNow = dists[idx];
+      let j = idx - 1;
+      while (j > 0 && distNow - dists[j] < windowM) {
+        j--;
+      }
+      const distThen = dists[j];
+      const dtSec = (times[idx] - times[j]) / 1000;
+      const dKm = (distNow - distThen) / 1000;
+      if (dtSec <= 0 || dKm <= 0) return NaN;
+      return dtSec / dKm;
+    }
+
+    function computeGradient(runner, distM, windowM) {
+      const cum = runner.cumDist;
+      const ele = runner.eleArr;
+      if (!cum.length || !ele.length) return null;
+      if (!ele.some((e) => e != null)) return null;
+      const half = windowM / 2;
+      const d1 = distM - half;
+      const d2 = distM + half;
+      let i1 = null,
+        i2 = null;
+      for (let i = 0; i < cum.length; i++) {
+        if (i1 === null && cum[i] >= d1) i1 = i;
+        if (i2 === null && cum[i] >= d2) {
+          i2 = i;
+          break;
+        }
+      }
+      if (i1 === null || i2 === null) return null;
+      const e1 = ele[i1],
+        e2 = ele[i2];
+      if (e1 == null || e2 == null) return null;
+      const d = cum[i2] - cum[i1];
+      if (d <= 0) return null;
+      return ((e2 - e1) / d) * 100;
+    }
+
+    function updateSummary() {
+      const runnersCount = runners.length;
+      const sumEl = document.getElementById("summaryRunners");
+      const distEl = document.getElementById("summaryDistance");
+      const durEl = document.getElementById("summaryDuration");
+
+      sumEl.textContent = `${runnersCount} runner${
+        runnersCount === 1 ? "" : "s"
+      }`;
+
+      let ref = runners.find((r) => r.cumDist.length);
+      if (ref) {
+        const totalKm = ref.cumDist[ref.cumDist.length - 1] / 1000;
+        distEl.textContent = `${totalKm.toFixed(2)} km`;
+      } else {
+        distEl.textContent = "– km";
+      }
+
+      if (globalStart != null && globalEnd != null) {
+        durEl.textContent = formatTime(globalEnd - globalStart);
+      } else {
+        durEl.textContent = "–:–";
+      }
+    }
+
+    function updateStatus() {
+      if (!runners.length) {
+        setStatus("No files loaded", false);
+      } else {
+        setStatus(
+          `${runners.length} track${runners.length > 1 ? "s" : ""} loaded`,
+          false
+        );
+      }
+    }
+
+    function computeGlobalTime() {
+      const allTimes = [];
+      runners.forEach((r) => {
+        if (r.visible === false || !r.times.length) return;
+        allTimes.push(r.times[0]);
+        allTimes.push(r.times[r.times.length - 1]);
+      });
+      if (!allTimes.length) {
+        globalStart = null;
+        globalEnd = null;
+        return;
+      }
+      globalStart = Math.min(...allTimes);
+      globalEnd = Math.max(...allTimes);
+      map.timeDimension.setCurrentTime(globalStart);
+      updateSummary();
+    }
+
+    function fitToData() {
+      const latlngs = [];
+      runners.forEach((r) => {
+        if (!r.points || !r.points.length) return;
+        r.points.forEach((p) => latlngs.push([p.lat, p.lon]));
+      });
+      if (!latlngs.length) return;
+      const bounds = L.latLngBounds(latlngs);
+      map.fitBounds(bounds, { padding: [20, 20] });
+    }
+
+    // --- Map time overlay ----------------------------------------------------
+
+    function updateMapTimeDisplay(currentTime) {
+      const el = document.getElementById("mapTime");
+      if (!el) return;
+
+      if (currentTime == null || !isFinite(currentTime)) {
+        el.textContent = "";
+        return;
+      }
+
+      const alignRadio = document.querySelector(
+        "input[name='align']:checked"
+      );
+      const mode = alignRadio ? alignRadio.value : "real";
+
+      if (mode === "real") {
+        // Show actual clock time from GPX
+        const dt = new Date(currentTime);
+        el.textContent = dt.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false
+        });
+      } else {
+        // Show synchronized race time (elapsed from BASE_SYNC_EPOCH)
+        const elapsedMs = currentTime - BASE_SYNC_EPOCH;
+        el.textContent = formatTime(elapsedMs);
+      }
+    }
+
+    // --- HUD + splits --------------------------------------------------------
+
+    function ensureHudRow(runner, index) {
+      if (runner.rowEl) return;
+      const tbody = document.getElementById("hudBody");
+      const tr = document.createElement("tr");
+      tr.dataset.runnerId = runner.id;
+
+      const nameTd = document.createElement("td");
+      const elapsedTd = document.createElement("td");
+      const distTd = document.createElement("td");
+      const avgPaceTd = document.createElement("td");
+      const curPaceTd = document.createElement("td");
+      const rollPaceTd = document.createElement("td");
+      const hrTd = document.createElement("td");
+      const gradTd = document.createElement("td");
+      const statusTd = document.createElement("td");
+
+      const container = document.createElement("div");
+      container.className = "runner-name-cell";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = true;
+      checkbox.className = "runner-toggle";
+      checkbox.addEventListener("change", () => {
+        runner.visible = checkbox.checked;
+        if (runner.tdLayer) {
+          if (runner.visible) runner.tdLayer.addTo(map);
+          else map.removeLayer(runner.tdLayer);
+        }
+        computeGlobalTime();
+        updateStatus();
+        renderSplitsPanel();
+        const t = map.timeDimension.getCurrentTime();
+        renderElevationProfile(t);
+        updateMapTimeDisplay(t);
+      });
+
+      const swatch = document.createElement("div");
+      swatch.className = "runner-swatch";
+      swatch.style.background = runner.color;
+
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = runner.name;
+
+      container.appendChild(checkbox);
+      container.appendChild(swatch);
+      container.appendChild(nameSpan);
+      nameTd.appendChild(container);
+
+      tr.appendChild(nameTd);
+      tr.appendChild(elapsedTd);
+      tr.appendChild(distTd);
+      tr.appendChild(avgPaceTd);
+      tr.appendChild(curPaceTd);
+      tr.appendChild(rollPaceTd);
+      tr.appendChild(hrTd);
+      tr.appendChild(gradTd);
+      tr.appendChild(statusTd);
+
+      tbody.appendChild(tr);
+      runner.rowEl = tr;
+    }
+
+    function updateRunnerDisplayNames() {
+      runners.forEach((r) => {
+        r.name = USE_FILE_NAME ? r.fileNameBase : r.gpxName;
+        if (r.rowEl) {
+          const span = r.rowEl.querySelector(".runner-name-cell span");
+          if (span) span.textContent = r.name;
+        }
+      });
+    }
+
+    function updateHUD(currentTime) {
+      const tbody = document.getElementById("hudBody");
+      if (!tbody) return;
+      if (currentTime == null) {
+        // Clear values but keep rows
+        runners.forEach((r) => {
+          if (!r.rowEl) return;
+          const cells = r.rowEl.querySelectorAll("td");
+          for (let i = 1; i < cells.length; i++) cells[i].textContent = "";
+        });
+        return;
+      }
+
+      let leader = null;
+      let leaderDist = -Infinity;
+
+      runners.forEach((r, idx) => {
+        if (!r.visible) {
+          if (r.rowEl) r.rowEl.style.display = "none";
+          return;
+        }
+        ensureHudRow(r, idx);
+        r.rowEl.style.display = "";
+
+        const times = r.times;
+        if (!times.length) return;
+        const distArr = r.cumDist;
+        const hrArr = r.hrArr;
+
+        const i = findIndexAtTime(times, currentTime);
+        const t0 = times[0];
+        const elapsedMs = times[i] - t0;
+        const distM = distArr[i] || 0;
+        if (distM > leaderDist) {
+          leaderDist = distM;
+          leader = r;
+        }
+
+        const avgPaceSec =
+          distM > 0 ? (elapsedMs / 1000) / (distM / 1000) : NaN;
+        const instPaceSec = computeInstantPace(r, i);              // current pace
+        const roll500Sec = computeRollingDistancePace(r, i, 500);  // 500m avg
+        const hr = hrArr[i] != null ? Math.round(hrArr[i]) : null;
+        const grad = computeGradient(r, distM, GRAD_WINDOW_M);
+
+        const cells = r.rowEl.querySelectorAll("td");
+
+        cells[1].textContent = formatTime(elapsedMs);         // Elapsed
+        cells[2].textContent = (distM / 1000).toFixed(2);     // Dist
+        cells[3].textContent = formatPace(avgPaceSec);        // Avg pace
+        cells[4].textContent = formatPace(instPaceSec);       // Current pace
+        cells[5].textContent = formatPace(roll500Sec);        // 500m avg
+        cells[6].textContent = hr != null ? hr : "–";         // HR
+        cells[7].textContent =
+          grad != null
+            ? `${grad >= 0 ? "+" : ""}${grad.toFixed(1)}%`
+            : "–";                                            // Grad
+
+        const finished =
+          currentTime >= times[times.length - 1] &&
+          distM >= distArr[distArr.length - 1] - 1;
+        cells[8].textContent = finished ? "Finished" : "";
+        cells[8].className = finished ? "status-finished" : "";
+      });
+
+      runners.forEach((r) => {
+        if (!r.rowEl) return;
+        r.rowEl.classList.toggle("leader", r === leader);
+      });
+    }
+
+    function renderSplitsPanel() {
+      const container = document.getElementById("splitsContainer");
+      const panel = document.getElementById("splitsPanel");
+      const show = document.getElementById("toggleSplits").checked;
+      if (!show) {
+        container.classList.add("hidden");
+        panel.innerHTML = "";
+        return;
+      }
+      container.classList.remove("hidden");
+      panel.innerHTML = "";
+
+      runners
+        .filter((r) => r.visible && r.splits && r.splits.length)
+        .forEach((r) => {
+          const card = document.createElement("div");
+          card.className = "runner-splits";
+
+          const header = document.createElement("div");
+          header.className = "runner-splits-header";
+
+          const left = document.createElement("div");
+          left.textContent = r.name;
+          const right = document.createElement("div");
+          const totalSplits = r.splits.length;
+          const lastSplit =
+            r.splits[r.splits.length - 1];
+          right.textContent = `${totalSplits} km · ${formatTime(
+            lastSplit.elapsedMs
+          )}`;
+
+          header.appendChild(left);
+          header.appendChild(right);
+
+          const table = document.createElement("table");
+          const thead = document.createElement("thead");
+          thead.innerHTML =
+            "<tr><th>KM</th><th>Split</th><th>Elapsed</th><th>Pace</th></tr>";
+          const tbody = document.createElement("tbody");
+
+          r.splits.forEach((s) => {
+            const tr = document.createElement("tr");
+            const pace = s.paceSecPerKm;
+            tr.innerHTML = `
+              <td>${s.km.toFixed(0)}</td>
+              <td>${(s.distM / 1000).toFixed(2)}</td>
+              <td>${formatTime(s.elapsedMs)}</td>
+              <td>${formatPace(pace)}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+
+          table.appendChild(thead);
+          table.appendChild(tbody);
+
+          card.appendChild(header);
+          card.appendChild(table);
+          panel.appendChild(card);
+        });
+
+      if (!panel.children.length) {
+        panel.textContent = "No splits available for visible runners.";
+      }
+    }
+
+    // --- Elevation helpers ---------------------------------------------------
+
+    function getElevationAtDistance(runner, distM) {
+      const cum = runner.cumDist;
+      const ele = runner.eleArr;
+      if (!cum.length || !ele.length) return null;
+
+      if (distM <= cum[0]) return ele[0] ?? null;
+      const lastIdx = cum.length - 1;
+      if (distM >= cum[lastIdx]) return ele[lastIdx] ?? null;
+
+      let lo = 0, hi = lastIdx;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (cum[mid] < distM) lo = mid;
+        else hi = mid;
+      }
+      const e1 = ele[lo], e2 = ele[hi];
+      if (e1 == null && e2 == null) return null;
+      if (e1 == null) return e2;
+      if (e2 == null) return e1;
+      const ratio = (distM - cum[lo]) / (cum[hi] - cum[lo] || 1);
+      return e1 + ratio * (e2 - e1);
+    }
+
+    // --- Elevation profile ---------------------------------------------------
+
+    function renderElevationProfile(currentTime) {
+      const svg = document.getElementById("elevSvg");
+      const noDataEl = document.getElementById("elevNoData");
+      if (!svg) return;
+
+      svg.innerHTML = "";
+
+      const visibleRunners = runners.filter(
+        (r) =>
+          r.visible &&
+          r.cumDist &&
+          r.cumDist.length &&
+          r.eleArr &&
+          r.eleArr.some((e) => e != null)
+      );
+
+      if (!visibleRunners.length) {
+        noDataEl.classList.remove("hidden");
+        return;
+      } else {
+        noDataEl.classList.add("hidden");
+      }
+
+      const box = svg.getBoundingClientRect();
+      const width = box.width || svg.clientWidth || 0;
+      const height = box.height || svg.clientHeight || 0;
+      if (width === 0 || height === 0) return;
+
+      // Find global distance & elevation ranges
+      let maxDist = 0;
+      let minEle = Infinity;
+      let maxEle = -Infinity;
+
+      visibleRunners.forEach((r) => {
+        const distArr = r.cumDist;
+        const eleArr = r.eleArr;
+        if (!distArr.length) return;
+        const d = distArr[distArr.length - 1];
+        if (d > maxDist) maxDist = d;
+        eleArr.forEach((e) => {
+          if (e == null) return;
+          if (e < minEle) minEle = e;
+          if (e > maxEle) maxEle = e;
+        });
+      });
+
+      if (!isFinite(minEle) || !isFinite(maxEle) || maxDist <= 0) {
+        noDataEl.classList.remove("hidden");
+        return;
+      }
+
+      elevMaxDist = maxDist;
+
+      // Initial view range if none yet
+      if (elevViewStart == null || elevViewEnd == null || elevViewEnd <= elevViewStart) {
+        elevViewStart = 0;
+        elevViewEnd = maxDist;
+      }
+
+      // Clamp current view to available distance
+      const spanCurrent = elevViewEnd - elevViewStart;
+      if (elevViewEnd > maxDist) {
+        elevViewEnd = maxDist;
+        elevViewStart = Math.max(0, elevViewEnd - spanCurrent);
+      }
+      if (elevViewStart < 0) {
+        elevViewStart = 0;
+        elevViewEnd = Math.min(maxDist, elevViewStart + spanCurrent);
+      }
+
+      const paddingLeft = ELEV_PADDING_LEFT;
+      const paddingRight = ELEV_PADDING_RIGHT;
+      const paddingTop = ELEV_PADDING_TOP;
+      const paddingBottom = ELEV_PADDING_BOTTOM;
+
+      const plotWidth = Math.max(1, width - paddingLeft - paddingRight);
+
+      const scaleDist = Math.max(1, elevViewEnd - elevViewStart);
+
+      const xScale = (distM) =>
+        paddingLeft +
+        ((distM - elevViewStart) / scaleDist) * plotWidth;
+
+      // Add padding to elevation range
+      const elePadding = (maxEle - minEle) * 0.1;
+      minEle -= elePadding;
+      maxEle += elePadding;
+
+      const yScale = (ele) =>
+        paddingTop +
+        ((maxEle - ele) / Math.max(1, maxEle - minEle)) *
+          Math.max(1, height - paddingTop - paddingBottom);
+
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+      // Horizontal grid lines (4 levels, equally spaced from bottom to top)
+      const levelsCount = 4;
+      const step = (maxEle - minEle) / Math.max(1, levelsCount - 1);
+      for (let i = 0; i < levelsCount; i++) {
+        const levelEle = minEle + step * i;
+        const y = yScale(levelEle);
+
+        const gridLine = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "line"
+        );
+        gridLine.setAttribute("x1", paddingLeft);
+        gridLine.setAttribute("x2", width - paddingRight);
+        gridLine.setAttribute("y1", y);
+        gridLine.setAttribute("y2", y);
+        gridLine.setAttribute(
+          "stroke",
+          i === 0 || i === levelsCount - 1
+            ? "rgba(15,23,42,0.9)"
+            : "rgba(31,41,55,0.8)"
+        );
+        gridLine.setAttribute("stroke-width", "1");
+        svg.appendChild(gridLine);
+
+        const label = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "text"
+        );
+        label.setAttribute("x", paddingLeft - 4);
+        label.setAttribute("y", y + 3);
+        label.setAttribute("text-anchor", "end");
+        label.setAttribute("fill", "#6b7280");
+        label.setAttribute("font-size", "9");
+        label.textContent = `${Math.round(levelEle)} m`;
+        svg.appendChild(label);
+      }
+
+      // Distance label (for current view span)
+      const distLabel = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text"
+      );
+      distLabel.setAttribute("x", width - paddingRight - 4);
+      distLabel.setAttribute("y", height - 4);
+      distLabel.setAttribute("text-anchor", "end");
+      distLabel.setAttribute("fill", "#6b7280");
+      distLabel.setAttribute("font-size", "9");
+      distLabel.textContent = `${(scaleDist / 1000).toFixed(1)} km`;
+      svg.appendChild(distLabel);
+
+      if (ELEV_MODE === "per") {
+        // --- Per-runner profiles ---
+        visibleRunners.forEach((r) => {
+          const distArr = r.cumDist;
+          const eleArr = r.eleArr;
+          const pts = [];
+
+          for (let i = 0; i < distArr.length; i++) {
+            const d = distArr[i];
+            const e = eleArr[i];
+            if (e == null) continue;
+            if (d < elevViewStart || d > elevViewEnd) continue;
+            const x = xScale(d);
+            const y = yScale(e);
+            pts.push(`${x},${y}`);
+          }
+
+          if (!pts.length) return;
+
+          const polyline = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "polyline"
+          );
+          polyline.setAttribute("points", pts.join(" "));
+          polyline.setAttribute("fill", "none");
+          polyline.setAttribute("stroke", r.color);
+          polyline.setAttribute("stroke-width", "1.4");
+          polyline.setAttribute("stroke-linejoin", "round");
+          polyline.setAttribute("stroke-linecap", "round");
+          polyline.setAttribute("opacity", "0.85");
+          svg.appendChild(polyline);
+        });
+      } else {
+        // --- Averaged profile ---
+        const samples = [];
+        const numSamples = 200;
+        for (let i = 0; i <= numSamples; i++) {
+          const distM =
+            elevViewStart +
+            (scaleDist * i) / numSamples;
+          let sum = 0;
+          let count = 0;
+          visibleRunners.forEach((r) => {
+            const e = getElevationAtDistance(r, distM);
+            if (e != null && isFinite(e)) {
+              sum += e;
+              count++;
+            }
+          });
+          if (count > 0) {
+            samples.push({
+              distM,
+              ele: sum / count
+            });
+          }
+        }
+
+        if (samples.length) {
+          const pts = samples.map((s) => {
+            const x = xScale(s.distM);
+            const y = yScale(s.ele);
+            return `${x},${y}`;
+          });
+
+          const polyline = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "polyline"
+          );
+          polyline.setAttribute("points", pts.join(" "));
+          polyline.setAttribute("fill", "none");
+          polyline.setAttribute("stroke", "#a5b4fc");
+          polyline.setAttribute("stroke-width", "1.8");
+          polyline.setAttribute("stroke-linejoin", "round");
+          polyline.setAttribute("stroke-linecap", "round");
+          polyline.setAttribute("opacity", "0.9");
+          svg.appendChild(polyline);
+        }
+      }
+
+      // Current positions as dots (always per-runner)
+      if (currentTime != null) {
+        visibleRunners.forEach((r) => {
+          const times = r.times;
+          const distArr = r.cumDist;
+          const eleArr = r.eleArr;
+          if (!times.length || !distArr.length) return;
+
+          let idx = findIndexAtTime(times, currentTime);
+          if (idx < 0) return;
+
+          let ele = eleArr[idx];
+          let distM = distArr[idx];
+
+          if (ele == null) {
+            for (let j = idx - 1; j >= 0; j--) {
+              if (eleArr[j] != null) {
+                ele = eleArr[j];
+                distM = distArr[j];
+                break;
+              }
+            }
+          }
+          if (ele == null) return;
+          if (distM < elevViewStart || distM > elevViewEnd) return;
+
+          const cx = xScale(distM);
+          const cy = yScale(ele);
+
+          const dot = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "circle"
+          );
+          dot.setAttribute("cx", cx);
+          dot.setAttribute("cy", cy);
+          dot.setAttribute("r", 3);
+          dot.setAttribute("fill", r.color);
+          dot.setAttribute("stroke", "#020617");
+          dot.setAttribute("stroke-width", "1");
+          svg.appendChild(dot);
+        });
+      }
+    }
+
+    // --- GPX parsing & runners ----------------------------------------------
+
+    function parseGpx(text, fileName, index) {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(text, "application/xml");
+      const rawFileName = fileName.replace(/\.gpx$/i, "");
+      const nameNode =
+        xml.querySelector("metadata > name") ||
+        xml.querySelector("gpx > name") ||
+        xml.querySelector("trk > name");
+      const gpxName =
+        (nameNode && nameNode.textContent.trim()) ||
+        rawFileName;
+
+      const ptNodes = [];
+      ["trkpt", "rtept", "wpt"].forEach((tag) => {
+        xml.querySelectorAll(tag).forEach((n) => ptNodes.push(n));
+      });
+      if (!ptNodes.length) {
+        throw new Error("No track points found");
+      }
+
+      const points = [];
+      for (const node of ptNodes) {
+        const lat = parseFloat(node.getAttribute("lat"));
+        const lon = parseFloat(node.getAttribute("lon"));
+        if (!isFinite(lat) || !isFinite(lon)) continue;
+        const eleNode = node.querySelector("ele");
+        const timeNode = node.querySelector("time");
+        const extHr =
+          node
+            .getElementsByTagName("gpxtpx:hr")[0] ||
+          node.getElementsByTagName("hr")[0];
+
+        const ele = eleNode
+          ? parseFloat(eleNode.textContent)
+          : null;
+        let t = timeNode ? Date.parse(timeNode.textContent) : NaN;
+        const hr = extHr
+          ? parseFloat(extHr.textContent)
+          : null;
+
+        points.push({
+          lat,
+          lon,
+          ele: isFinite(ele) ? ele : null,
+          hr: isFinite(hr) ? hr : null,
+          origTimeMs: isFinite(t) ? t : NaN,
+          timeMs: NaN
+        });
+      }
+
+      if (!points.length) {
+        throw new Error("No usable lat/lon points");
+      }
+
+      // Fix times: ensure no NaNs and strictly increasing
+      let lastValid = Date.now();
+      for (let i = 0; i < points.length; i++) {
+        let t = points[i].origTimeMs;
+        if (!isFinite(t)) {
+          t = lastValid + 1000;
+        }
+        if (i > 0 && t <= lastValid) {
+          t = lastValid + 1000;
+        }
+        points[i].origTimeMs = t;
+        points[i].timeMs = t; // initial REAL alignment
+        lastValid = t;
+      }
+
+      points.sort((a, b) => a.origTimeMs - b.origTimeMs);
+
+      const times = points.map((p) => p.origTimeMs);
+      const cumDist = [0];
+      for (let i = 1; i < points.length; i++) {
+        const p0 = points[i - 1];
+        const p1 = points[i];
+        const d = haversine(
+          p0.lat,
+          p0.lon,
+          p1.lat,
+          p1.lon
+        );
+        cumDist[i] = cumDist[i - 1] + (isFinite(d) ? d : 0);
+      }
+      const eleArr = points.map((p) => p.ele);
+      const hrArr = points.map((p) => p.hr);
+
+      // Splits every 1km
+      const splits = [];
+      let nextSplit = 1000;
+      const startTime = times[0];
+      let lastSplitTime = startTime;
+      while (
+        cumDist[cumDist.length - 1] >= nextSplit
+      ) {
+        for (let i = 1; i < cumDist.length; i++) {
+          if (cumDist[i] >= nextSplit) {
+            const d1 = cumDist[i - 1];
+            const d2 = cumDist[i];
+            const t1 = times[i - 1];
+            const t2 = times[i];
+            const ratio =
+              (nextSplit - d1) / (d2 - d1 || 1);
+            const tSplit =
+              t1 + ratio * (t2 - t1);
+            const elapsedMs =
+              tSplit - startTime;
+            const legMs =
+              tSplit - lastSplitTime;
+            lastSplitTime = tSplit;
+            const paceSec =
+              legMs / 1000 / (1.0); // 1km
+            splits.push({
+              km: nextSplit / 1000,
+              distM: nextSplit,
+              timeMs: tSplit,
+              elapsedMs,
+              paceSecPerKm: paceSec
+            });
+            break;
+          }
+        }
+        nextSplit += 1000;
+      }
+
+      const color = pickColor(index);
+
+      const runner = {
+        id: index,
+        gpxName,
+        fileNameBase: rawFileName,
+        name: USE_FILE_NAME ? rawFileName : gpxName,
+        color,
+        points,
+        origTimes: times.slice(),
+        times: times.slice(),
+        cumDist,
+        eleArr,
+        hrArr,
+        splits,
+        layer: null,
+        tdLayer: null,
+        visible: true,
+        rowEl: null
+      };
+
+      return runner;
+    }
+
+    function buildTimeLayer(runner) {
+      if (runner.tdLayer) {
+        map.removeLayer(runner.tdLayer);
+        runner.tdLayer = null;
+      }
+      if (!runner.times.length) return;
+
+      runner.points.forEach((p, idx) => {
+        p.timeMs = runner.times[idx];
+      });
+
+      const coords = runner.points.map((p) => [
+        p.lon,
+        p.lat
+      ]);
+      const timesIso = runner.times.map((t) =>
+        new Date(t).toISOString()
+      );
+
+      const feature = {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: coords
+        },
+        properties: {
+          times: timesIso
+        }
+      };
+
+      const geojson = {
+        type: "FeatureCollection",
+        features: [feature]
+      };
+
+      const baseLayer = L.geoJSON(geojson, {
+        style: () => ({
+          color: runner.color,
+          weight: 3,
+          opacity: 0.8
+        }),
+        pointToLayer: (feat, latlng) =>
+          L.circleMarker(latlng, {
+            radius: 4,
+            fillColor: runner.color,
+            color: "#020617",
+            weight: 1,
+            fillOpacity: 1
+          })
+      });
+
+      const tdLayer =
+        L.timeDimension.layer.geoJson(baseLayer, {
+          updateTimeDimension: true,
+          addlastPoint: true,
+          duration: isoDurationFromSeconds(TAIL_SECONDS)
+        });
+
+      runner.layer = baseLayer;
+      runner.tdLayer = tdLayer;
+      if (runner.visible) tdLayer.addTo(map);
+    }
+
+    function applyAlignMode(mode) {
+      if (!runners.length) return;
+      if (mode === "real") {
+        runners.forEach((r) => {
+          r.times = r.origTimes.slice();
+          buildTimeLayer(r);
+        });
+      } else {
+        runners.forEach((r) => {
+          const start = r.origTimes[0];
+          r.times = r.origTimes.map(
+            (t) => BASE_SYNC_EPOCH + (t - start)
+          );
+          buildTimeLayer(r);
+        });
+      }
+      computeGlobalTime();
+      map.timeDimension.setCurrentTime(
+        globalStart || Date.now()
+      );
+      const t = map.timeDimension.getCurrentTime();
+      updateHUD(t);
+      renderElevationProfile(t);
+      updateMapTimeDisplay(t);
+    }
+
+    // --- File handling -------------------------------------------------------
+
+    const fileInput =
+      document.getElementById("fileInput");
+    const dropZone = document.getElementById("drop");
+
+    function handleFiles(fileList) {
+      const files = Array.from(fileList).filter((f) =>
+        /\.gpx$/i.test(f.name)
+      );
+      if (!files.length) {
+        setStatus("No GPX files detected", true);
+        return;
+      }
+      setStatus(
+        `Loading ${files.length} file${
+          files.length > 1 ? "s" : ""
+        }...`,
+        false
+      );
+
+      let loaded = 0;
+      files.forEach((file, idx) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const runner = parseGpx(
+              ev.target.result,
+              file.name,
+              runners.length
+            );
+            runners.push(runner);
+            buildTimeLayer(runner);
+            ensureHudRow(runner, runners.length - 1);
+            computeGlobalTime();
+            fitToData();
+            renderSplitsPanel();
+            updateStatus();
+            const tNow = map.timeDimension.getCurrentTime();
+            renderElevationProfile(tNow);
+            updateMapTimeDisplay(tNow);
+          } catch (e) {
+            handleParseError(file.name, e);
+          } finally {
+            loaded++;
+            if (loaded === files.length) {
+              updateSummary();
+            }
+          }
+        };
+        reader.onerror = () => {
+          handleParseError(
+            file.name,
+            reader.error || new Error("File read error")
+          );
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    fileInput.addEventListener("change", (e) => {
+      handleFiles(e.target.files);
+      fileInput.value = "";
+    });
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("active");
+    });
+    dropZone.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("active");
+    });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("active");
+      if (e.dataTransfer && e.dataTransfer.files) {
+        handleFiles(e.dataTransfer.files);
+      }
+    });
+
+    // --- Controls wiring -----------------------------------------------------
+
+    document
+      .getElementById("toggleSplits")
+      .addEventListener("change", () => {
+        renderSplitsPanel();
+      });
+
+    document
+      .querySelectorAll("input[name='align']")
+      .forEach((radio) => {
+        radio.addEventListener("change", (e) => {
+          if (!e.target.checked) return;
+          const mode = e.target.value;
+          applyAlignMode(mode);
+        });
+      });
+
+    document
+      .getElementById("gradWindow")
+      .addEventListener("change", (e) => {
+        const v = parseInt(e.target.value, 10);
+        GRAD_WINDOW_M = isFinite(v) ? v : 100;
+        const t = map.timeDimension.getCurrentTime();
+        updateHUD(t);
+        updateMapTimeDisplay(t);
+      });
+
+    document
+      .querySelectorAll("input[name='nameMode']")
+      .forEach((radio) => {
+        radio.addEventListener("change", (e) => {
+          if (!e.target.checked) return;
+          USE_FILE_NAME = e.target.value === "file";
+          updateRunnerDisplayNames();
+          renderSplitsPanel();
+        });
+      });
+
+    const tailSlider = document.getElementById("tailSlider");
+    const tailLabel = document.getElementById("tailLabel");
+
+    function updateTailLabel() {
+      tailLabel.textContent =
+        TAIL_SECONDS === 0 ? "Off" : `${TAIL_SECONDS}s`;
+    }
+
+    tailSlider.addEventListener("input", (e) => {
+      const v = parseInt(e.target.value, 10);
+      TAIL_SECONDS = isFinite(v) ? v : 0;
+      updateTailLabel();
+    });
+
+    tailSlider.addEventListener("change", () => {
+      runners.forEach((r) => buildTimeLayer(r));
+    });
+
+    // Discrete speed control (1x / 2x / 4x / 10x)
+    const SPEED_TRANSITIONS = {
+      "1": 1000,  // 1x
+      "2": 500,   // 2x
+      "4": 250,   // 4x (default)
+      "10": 100   // 10x
+    };
+
+    function setPlaybackSpeed(multStr) {
+      const t = SPEED_TRANSITIONS[multStr] || DEFAULT_TRANSITION_TIME;
+      player.setTransitionTime(t);
+    }
+
+    document
+      .querySelectorAll("input[name='speed']")
+      .forEach((radio) => {
+        radio.addEventListener("change", (e) => {
+          if (!e.target.checked) return;
+          setPlaybackSpeed(e.target.value);
+        });
+      });
+
+    // Elevation mode toggle
+    document
+      .querySelectorAll("input[name='elevMode']")
+      .forEach((radio) => {
+        radio.addEventListener("change", (e) => {
+          if (!e.target.checked) return;
+          ELEV_MODE = e.target.value === "avg" ? "avg" : "per";
+          const t = map.timeDimension.getCurrentTime();
+          renderElevationProfile(t);
+          updateMapTimeDisplay(t);
+        });
+      });
+
+    // Ensure player is at default 4x on load
+    setPlaybackSpeed("4");
+
+    map.timeDimension.on("timeload", () => {
+      const t = map.timeDimension.getCurrentTime();
+      updateHUD(t);
+      renderElevationProfile(t);
+      updateMapTimeDisplay(t);
+    });
+
+    window.addEventListener("resize", () => {
+      const t = map.timeDimension.getCurrentTime();
+      renderElevationProfile(t);
+      updateMapTimeDisplay(t);
+    });
+
+    // --- Elevation zoom & pan handlers --------------------------------------
+
+    const elevSvgEl = document.getElementById("elevSvg");
+
+    if (elevSvgEl) {
+      // Zoom with mouse wheel (horizontal zoom)
+      elevSvgEl.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        if (elevMaxDist <= 0) return;
+        if (elevViewStart == null || elevViewEnd == null) return;
+
+        const span = elevViewEnd - elevViewStart;
+        if (span <= 0) return;
+
+        const zoomIn = e.deltaY < 0;
+        let newSpan = span * (zoomIn ? 0.8 : 1.25);
+
+        const minSpan = elevMaxDist / 100; // arbitrary min zoom (1% of course)
+        const maxSpan = elevMaxDist;       // max zoom = whole course
+        if (newSpan < minSpan) newSpan = minSpan;
+        if (newSpan > maxSpan) newSpan = maxSpan;
+
+        const center = (elevViewStart + elevViewEnd) / 2;
+        let newStart = center - newSpan / 2;
+        let newEnd = center + newSpan / 2;
+
+        // Clamp
+        if (newStart < 0) {
+          newEnd -= newStart;
+          newStart = 0;
+        }
+        if (newEnd > elevMaxDist) {
+          const diff = newEnd - elevMaxDist;
+          newStart -= diff;
+          newEnd = elevMaxDist;
+          if (newStart < 0) newStart = 0;
+        }
+
+        elevViewStart = newStart;
+        elevViewEnd = newEnd;
+
+        const t = map.timeDimension.getCurrentTime();
+        renderElevationProfile(t);
+        updateMapTimeDisplay(t);
+      });
+
+      // Pan with mouse drag
+      elevSvgEl.addEventListener("mousedown", (e) => {
+        if (elevMaxDist <= 0) return;
+        if (elevViewStart == null || elevViewEnd == null) return;
+        elevIsPanning = true;
+        elevPanStartX = e.clientX;
+        elevPanViewStart = elevViewStart;
+        elevPanViewEnd = elevViewEnd;
+        elevSvgEl.classList.add("panning");
+      });
+
+      window.addEventListener("mousemove", (e) => {
+        if (!elevIsPanning) return;
+        const box = elevSvgEl.getBoundingClientRect();
+        const plotWidth = Math.max(
+          1,
+          box.width - ELEV_PADDING_LEFT - ELEV_PADDING_RIGHT
+        );
+        const dx = e.clientX - elevPanStartX;
+        const span = elevPanViewEnd - elevPanViewStart;
+        if (span <= 0) return;
+
+        const distPerPx = span / plotWidth;
+        const shift = -dx * distPerPx;
+
+        let newStart = elevPanViewStart + shift;
+        let newEnd = elevPanViewEnd + shift;
+
+        // Clamp
+        if (newStart < 0) {
+          newEnd -= newStart;
+          newStart = 0;
+        }
+        if (newEnd > elevMaxDist) {
+          const diff = newEnd - elevMaxDist;
+          newStart -= diff;
+          newEnd = elevMaxDist;
+          if (newStart < 0) newStart = 0;
+        }
+
+        elevViewStart = newStart;
+        elevViewEnd = newEnd;
+
+        const t = map.timeDimension.getCurrentTime();
+        renderElevationProfile(t);
+        updateMapTimeDisplay(t);
+      });
+
+      const endPan = () => {
+        if (!elevIsPanning) return;
+        elevIsPanning = false;
+        elevSvgEl.classList.remove("panning");
+      };
+
+      window.addEventListener("mouseup", endPan);
+      window.addEventListener("mouseleave", endPan);
+    }
+
+    // Initial
+    setStatus("No files loaded", false);
+    osm.addTo(map);
+    updateTailLabel();
+    updateMapTimeDisplay(map.timeDimension.getCurrentTime());
+  </script>
+</body>
+</html>
