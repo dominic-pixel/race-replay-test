@@ -63,7 +63,7 @@
 
     #app {
       display: grid;
-      grid-template-rows: auto auto 1fr;
+      grid-template-rows: auto 1fr; /* toolbar + main (settings is floating) */
       height: 100%;
     }
 
@@ -218,31 +218,97 @@
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.15s;
-      z-index: 1500;
+      z-index: 2500;
     }
     .tooltip:hover span {
       opacity: 1;
     }
 
-    /* Settings panel (drop-down) */
+    .hidden {
+      display: none !important;
+    }
+
+    /* Settings pop-out window */
 
     #settingsPanel {
+      position: fixed;
+      top: 56px; /* just below toolbar */
+      right: 16px;
+      width: 360px;
+      max-width: 90vw;
+      max-height: 80vh;
+      padding: 0.75rem 0.9rem 0.8rem;
+      border-radius: 0.9rem;
+      border: 1px solid rgba(31, 41, 55, 0.95);
+      background: radial-gradient(circle at top, #020617 0, #020617 55%, #000 100%);
+      box-shadow:
+        0 18px 45px rgba(0, 0, 0, 0.85),
+        0 0 0 1px rgba(15, 23, 42, 0.95);
+      z-index: 2000;
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 0.5rem;
+      overflow-y: auto;
+    }
+
+    #settingsHeaderRow {
+      display: flex;
       align-items: center;
-      gap: 0.75rem;
-      padding: 0.55rem 0.9rem;
-      border-bottom: 1px solid var(--border);
-      background: radial-gradient(circle at top, #020617 0, #020617 60%, #000 100%);
-      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.9);
+      justify-content: space-between;
+      margin-bottom: 0.35rem;
+    }
+
+    #settingsTitle {
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #settingsClose {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0.1rem 0.3rem;
+      border-radius: 999px;
+      font-size: 0.9rem;
+    }
+    #settingsClose:hover {
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--fg);
     }
 
     #settingsPanel .section {
-      border-right: 1px solid rgba(15, 23, 42, 0.9);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem 0.6rem;
+      padding: 0.45rem 0.15rem 0.25rem;
+      border-right: none;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+      margin-right: 0;
+    }
+    #settingsPanel .section:last-of-type {
+      border-bottom: none;
     }
 
-    .hidden {
-      display: none !important;
+    #settingsPanel label {
+      font-size: 0.78rem;
+    }
+
+    .settings-section-title {
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--sub);
+      margin-right: 0.3rem;
+    }
+
+    #settingsAboutText {
+      font-size: 0.7rem;
+      color: var(--muted);
+      line-height: 1.4;
     }
 
     /* Main layout */
@@ -251,7 +317,7 @@
       display: grid;
       grid-template-columns: minmax(0, 2.3fr) minmax(320px, 1.2fr);
       gap: 0;
-      height: calc(100vh - 56px); /* toolbar height only; page may scroll when settings open */
+      height: calc(100vh - 56px); /* toolbar height */
     }
 
     /* Map column split into map + elevation profile */
@@ -528,113 +594,6 @@
       </div>
     </div>
 
-    <!-- Settings drop-down -->
-    <div id="settingsPanel" class="hidden">
-      <div class="section">
-        <label>Alignment:</label>
-        <label>
-          <input type="radio" name="align" value="real" checked />
-          Real time
-        </label>
-        <label>
-          <input type="radio" name="align" value="sync" />
-          Synchronized start
-        </label>
-      </div>
-
-      <div class="section">
-        <label for="gradWindow">Gradient window</label>
-        <div class="tooltip">
-          ?
-          <span>
-            Gradient is calculated as the change in elevation divided by
-            distance over this window centred on the runner.<br /><br />
-            <strong>50 m</strong> – very responsive but more jittery<br />
-            <strong>100 m</strong> – balanced (default)<br />
-            <strong>200 m</strong> – very smooth, averages short hills
-          </span>
-        </div>
-        <select id="gradWindow">
-          <option value="50">50 m</option>
-          <option value="100" selected>100 m</option>
-          <option value="200">200 m</option>
-        </select>
-      </div>
-
-      <div class="section">
-        <label>
-          <input type="checkbox" id="toggleSplits" />
-          Show splits
-        </label>
-      </div>
-
-      <div class="section">
-        <label for="basemap">Map Type:</label>
-        <select id="basemap">
-          <option value="osm">OSM</option>
-          <option value="esri">Esri imagery</option>
-          <option value="terrain">Terrain</option>
-        </select>
-      </div>
-
-      <div class="section">
-        <label>Names:</label>
-        <label>
-          <input type="radio" name="nameMode" value="gpx" checked />
-          Course
-        </label>
-        <label>
-          <input type="radio" name="nameMode" value="file" />
-          File
-        </label>
-      </div>
-
-      <div class="section">
-        <label for="tailSlider">Tail length</label>
-        <input
-          type="range"
-          id="tailSlider"
-          min="0"
-          max="180"
-          step="10"
-          value="30"
-        />
-        <span class="pill" id="tailLabel">30s</span>
-      </div>
-
-      <div class="section">
-        <label>Speed:</label>
-        <label>
-          <input type="radio" name="speed" value="1" />
-          1×
-        </label>
-        <label>
-          <input type="radio" name="speed" value="2" />
-          2×
-        </label>
-        <label>
-          <input type="radio" name="speed" value="4" checked />
-          4×
-        </label>
-        <label>
-          <input type="radio" name="speed" value="10" />
-          10×
-        </label>
-      </div>
-
-      <div class="section">
-        <label>Elevation:</label>
-        <label>
-          <input type="radio" name="elevMode" value="per" checked />
-          Per runner
-        </label>
-        <label>
-          <input type="radio" name="elevMode" value="avg" />
-          Average
-        </label>
-      </div>
-    </div>
-
     <!-- Main content -->
     <div id="main">
       <div id="mapColumn">
@@ -677,6 +636,128 @@
           <h3>KM splits</h3>
           <div id="splitsPanel"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings pop-out window -->
+  <div id="settingsPanel" class="hidden">
+    <div id="settingsHeaderRow">
+      <div id="settingsTitle">Settings</div>
+      <button id="settingsClose" type="button" title="Close settings">✕</button>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">Alignment:</span>
+      <label>
+        <input type="radio" name="align" value="real" checked />
+        Real time
+      </label>
+      <label>
+        <input type="radio" name="align" value="sync" />
+        Synchronized start
+      </label>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">Gradient window</span>
+      <div class="tooltip">
+        ?
+        <span>
+          Gradient is calculated as the change in elevation divided by
+          distance over this window centred on the runner.<br /><br />
+          <strong>50 m</strong> – very responsive but more jittery<br />
+          <strong>100 m</strong> – balanced (default)<br />
+          <strong>200 m</strong> – very smooth, averages short hills
+        </span>
+      </div>
+      <select id="gradWindow">
+        <option value="50">50 m</option>
+        <option value="100" selected>100 m</option>
+        <option value="200">200 m</option>
+      </select>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">Splits:</span>
+      <label>
+        <input type="checkbox" id="toggleSplits" />
+        Show splits
+      </label>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">Basemap:</span>
+      <select id="basemap">
+        <option value="osm">OSM</option>
+        <option value="esri">Esri imagery</option>
+        <option value="terrain">Terrain</option>
+      </select>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">Names:</span>
+      <label>
+        <input type="radio" name="nameMode" value="gpx" checked />
+        Course
+      </label>
+      <label>
+        <input type="radio" name="nameMode" value="file" />
+        File
+      </label>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">Tail length:</span>
+      <input
+        type="range"
+        id="tailSlider"
+        min="0"
+        max="180"
+        step="10"
+        value="30"
+      />
+      <span class="pill" id="tailLabel">30s</span>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">Speed:</span>
+      <label>
+        <input type="radio" name="speed" value="1" />
+        1×
+      </label>
+      <label>
+        <input type="radio" name="speed" value="2" />
+        2×
+      </label>
+      <label>
+        <input type="radio" name="speed" value="4" checked />
+        4×
+      </label>
+      <label>
+        <input type="radio" name="speed" value="10" />
+        10×
+      </label>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">Elevation:</span>
+      <label>
+        <input type="radio" name="elevMode" value="per" checked />
+        Per runner
+      </label>
+      <label>
+        <input type="radio" name="elevMode" value="avg" />
+        Average
+      </label>
+    </div>
+
+    <div class="section">
+      <span class="settings-section-title">About:</span>
+      <div id="settingsAboutText">
+        Designed by dominic parry<br />
+        dominic@dmsd.co.uk<br />
+        2025
       </div>
     </div>
   </div>
@@ -819,20 +900,40 @@
       setStatus(`Error parsing ${fileName}: ${msg}`, true);
     }
 
-    // --- Settings toggle -----------------------------------------------------
+    // --- Settings pop-out toggle --------------------------------------------
 
     const settingsPanel = document.getElementById("settingsPanel");
     const settingsToggle = document.getElementById("settingsToggle");
     const settingsChevron = document.getElementById("settingsChevron");
+    const settingsClose = document.getElementById("settingsClose");
+
+    function openSettings() {
+      settingsPanel.classList.remove("hidden");
+      settingsChevron.textContent = "▲";
+    }
+
+    function closeSettings() {
+      settingsPanel.classList.add("hidden");
+      settingsChevron.textContent = "▼";
+    }
 
     settingsToggle.addEventListener("click", () => {
       const isHidden = settingsPanel.classList.contains("hidden");
-      if (isHidden) {
-        settingsPanel.classList.remove("hidden");
-        settingsChevron.textContent = "▲";
-      } else {
-        settingsPanel.classList.add("hidden");
-        settingsChevron.textContent = "▼";
+      if (isHidden) openSettings();
+      else closeSettings();
+    });
+
+    settingsClose.addEventListener("click", () => {
+      closeSettings();
+    });
+
+    // Optional: close if user clicks outside the panel (desktop-y window feel)
+    document.addEventListener("mousedown", (e) => {
+      if (settingsPanel.classList.contains("hidden")) return;
+      const withinPanel = settingsPanel.contains(e.target);
+      const withinButton = settingsToggle.contains(e.target);
+      if (!withinPanel && !withinButton) {
+        closeSettings();
       }
     });
 
