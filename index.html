@@ -311,28 +311,67 @@
       line-height: 1.4;
     }
 
-    /* Main layout */
+    /* Main layout: resizable columns */
 
     #main {
-      display: grid;
-      grid-template-columns: minmax(0, 2.3fr) minmax(320px, 1.2fr);
-      gap: 0;
+      display: flex;
+      flex-direction: row;
       height: calc(100vh - 56px); /* toolbar height */
+      overflow: hidden;
     }
 
-    /* Map column split into map + elevation profile */
-
     #mapColumn {
-      display: grid;
-      grid-template-rows: minmax(0, 0.85fr) minmax(0, 0.15fr);
-      height: 100%;
+      flex: 0 0 65%;
+      min-width: 25%;
+      display: flex;
+      flex-direction: column;
       position: relative; /* for mapTime overlay */
     }
 
-    #map {
-      width: 100%;
-      height: 100%;
+    #verticalResizer {
+      flex: 0 0 4px;
+      cursor: col-resize;
       background: #020617;
+      border-left: 1px solid #111827;
+      border-right: 1px solid #111827;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.9);
+    }
+
+    #side {
+      flex: 0 0 35%;
+      min-width: 20%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      border-left: 1px solid var(--border);
+      background: radial-gradient(circle at top, #020617 0, #020617 40%, #020617 100%);
+    }
+
+    /* Map column split into map + elevation profile with resizer */
+
+    #map {
+      flex: 0 0 85%;
+      min-height: 25%;
+      width: 100%;
+      background: #020617;
+    }
+
+    #horizontalResizer {
+      flex: 0 0 4px;
+      cursor: row-resize;
+      background: #020617;
+      border-top: 1px solid #111827;
+      border-bottom: 1px solid #111827;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.9);
+      z-index: 5;
+    }
+
+    #elevContainer {
+      flex: 0 0 15%;
+      min-height: 10%;
+      border-top: 1px solid var(--border);
+      background: radial-gradient(circle at top, #020617 0, #020617 60%, #020617 100%);
+      position: relative;
+      padding: 4px 8px 6px;
     }
 
     /* Time overlay in top-right of map column */
@@ -351,13 +390,6 @@
       z-index: 1200;
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
       pointer-events: none;
-    }
-
-    #elevContainer {
-      border-top: 1px solid var(--border);
-      background: radial-gradient(circle at top, #020617 0, #020617 60%, #020617 100%);
-      position: relative;
-      padding: 4px 8px 6px;
     }
 
     #elevContainerTitle {
@@ -389,13 +421,6 @@
     }
     #elevSvg.panning {
       cursor: grabbing !important;
-    }
-
-    #side {
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      border-left: 1px solid var(--border);
-      background: radial-gradient(circle at top, #020617 0, #020617 40%, #020617 100%);
     }
 
     #summary {
@@ -594,17 +619,19 @@
       </div>
     </div>
 
-    <!-- Main content -->
+    <!-- Main content: resizable layout -->
     <div id="main">
       <div id="mapColumn">
         <div id="map"></div>
         <div id="mapTime"></div>
+        <div id="horizontalResizer"></div>
         <div id="elevContainer">
           <div id="elevContainerTitle">Elevation profile</div>
           <div id="elevNoData" class="hidden">No elevation data</div>
           <svg id="elevSvg"></svg>
         </div>
       </div>
+      <div id="verticalResizer"></div>
       <div id="side">
         <div id="summary">
           <h2>Race HUD</h2>
@@ -817,7 +844,7 @@
     let elevViewEnd = null;
     let elevMaxDist = 0;
 
-    // Pan state
+    // Pan state for elevation
     let elevIsPanning = false;
     let elevPanStartX = 0;
     let elevPanViewStart = 0;
@@ -927,7 +954,7 @@
       closeSettings();
     });
 
-    // Optional: close if user clicks outside the panel (desktop-y window feel)
+    // Optional: close if user clicks outside the panel
     document.addEventListener("mousedown", (e) => {
       if (settingsPanel.classList.contains("hidden")) return;
       const withinPanel = settingsPanel.contains(e.target);
@@ -2076,6 +2103,7 @@
       const t = map.timeDimension.getCurrentTime();
       renderElevationProfile(t);
       updateMapTimeDisplay(t);
+      map.invalidateSize();
     });
 
     // --- Elevation zoom & pan handlers --------------------------------------
@@ -2181,6 +2209,127 @@
       window.addEventListener("mouseup", endPan);
       window.addEventListener("mouseleave", endPan);
     }
+
+    // --- Resizable layout (vertical + horizontal splitters) -----------------
+
+    const mainEl = document.getElementById("main");
+    const mapColumnEl = document.getElementById("mapColumn");
+    const sideEl = document.getElementById("side");
+    const verticalResizerEl = document.getElementById("verticalResizer");
+    const mapEl = document.getElementById("map");
+    const horizontalResizerEl = document.getElementById("horizontalResizer");
+    const elevContainerEl = document.getElementById("elevContainer");
+
+    let isResizingVert = false;
+    let isResizingHoriz = false;
+    let startX = 0;
+    let startY = 0;
+    let startMapWidth = 0;
+    let startSideWidth = 0;
+    let totalWidth = 0;
+    let startMapHeight = 0;
+    let startElevHeight = 0;
+    let totalHeight = 0;
+
+    verticalResizerEl.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      isResizingVert = true;
+      startX = e.clientX;
+
+      const mainRect = mainEl.getBoundingClientRect();
+      const mapRect = mapColumnEl.getBoundingClientRect();
+      const sideRect = sideEl.getBoundingClientRect();
+
+      totalWidth = mainRect.width;
+      startMapWidth = mapRect.width;
+      startSideWidth = sideRect.width;
+
+      document.body.style.userSelect = "none";
+    });
+
+    horizontalResizerEl.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      isResizingHoriz = true;
+      startY = e.clientY;
+
+      const mapRect = mapEl.getBoundingClientRect();
+      const elevRect = elevContainerEl.getBoundingClientRect();
+
+      startMapHeight = mapRect.height;
+      startElevHeight = elevRect.height;
+      totalHeight = startMapHeight + startElevHeight;
+
+      document.body.style.userSelect = "none";
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!isResizingVert && !isResizingHoriz) return;
+
+      if (isResizingVert) {
+        const dx = e.clientX - startX;
+        let newMapWidth = startMapWidth + dx;
+        let newSideWidth = startSideWidth - dx;
+
+        const minMap = totalWidth * 0.25;
+        const minSide = totalWidth * 0.2;
+
+        if (newMapWidth < minMap) {
+          newMapWidth = minMap;
+          newSideWidth = totalWidth - newMapWidth;
+        }
+        if (newSideWidth < minSide) {
+          newSideWidth = minSide;
+          newMapWidth = totalWidth - newSideWidth;
+        }
+
+        const mapPct = (newMapWidth / totalWidth) * 100;
+        const sidePct = (newSideWidth / totalWidth) * 100;
+
+        mapColumnEl.style.flexBasis = mapPct + "%";
+        sideEl.style.flexBasis = sidePct + "%";
+
+        map.invalidateSize();
+        const t = map.timeDimension.getCurrentTime();
+        renderElevationProfile(t);
+        updateMapTimeDisplay(t);
+      }
+
+      if (isResizingHoriz) {
+        const dy = e.clientY - startY;
+        let newMapHeight = startMapHeight + dy;
+        let newElevHeight = startElevHeight - dy;
+
+        const minMapH = totalHeight * 0.25;
+        const minElevH = totalHeight * 0.15;
+
+        if (newMapHeight < minMapH) {
+          newMapHeight = minMapH;
+          newElevHeight = totalHeight - newMapHeight;
+        }
+        if (newElevHeight < minElevH) {
+          newElevHeight = minElevH;
+          newMapHeight = totalHeight - newElevHeight;
+        }
+
+        const mapPct = (newMapHeight / totalHeight) * 100;
+        const elevPct = (newElevHeight / totalHeight) * 100;
+
+        mapEl.style.flexBasis = mapPct + "%";
+        elevContainerEl.style.flexBasis = elevPct + "%";
+
+        map.invalidateSize();
+        const t = map.timeDimension.getCurrentTime();
+        renderElevationProfile(t);
+        updateMapTimeDisplay(t);
+      }
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (!isResizingVert && !isResizingHoriz) return;
+      isResizingVert = false;
+      isResizingHoriz = false;
+      document.body.style.userSelect = "";
+    });
 
     // Initial
     setStatus("No files loaded", false);
